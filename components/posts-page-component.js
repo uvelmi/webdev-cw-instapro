@@ -2,7 +2,7 @@ import { USER_POSTS_PAGE } from '../routes.js'
 import { renderHeaderComponent } from './header-component.js'
 import {posts, goToPage, getToken, renderApp} from '../index.js'
 import { addLike, removeLike, deletePost} from '../api.js'
-import { replacerString } from '../helpers.js'
+import { replacerString, getUserFromLocalStorage } from '../helpers.js'
 import { formatDistance } from 'date-fns'
 import { ru } from 'date-fns/locale'
 
@@ -20,14 +20,14 @@ export function renderPostsPageComponent({ appEl }) {
      */
 
     let message = null
-    if (posts) {
+		if (posts.length > 0) {
         const getApiPosts = posts.map((postItem) => {
             return {
                 postId: postItem.id,
                 postImageUrl: postItem.imageUrl,
                 postCreatedAt: formatPostCreatedAt(postItem.createdAt),
                 description: replacerString(postItem.description),
-                userId: postItem.user.id,
+                userId: replacerString(postItem.user.id),
                 userName: replacerString(postItem.user.name),
                 userLogin: postItem.user.login,
                 postImageUserUrl: postItem.user.imageUrl,
@@ -38,6 +38,7 @@ export function renderPostsPageComponent({ appEl }) {
 
         message = getApiPosts
             .map((postItem, index) => {
+							const isCurrentUserPost = postItem.userId === getCurrentUserId();
                 return `
          <li id="post" class="post">
            <div class="post-header" data-user-id="${postItem.userId}">
@@ -45,7 +46,7 @@ export function renderPostsPageComponent({ appEl }) {
                <p class="post-header__user-name">${postItem.userName}</p>
            </div>
            <div class="post-image-container">
-             <img class="post-image" data-post-id="${postItem.postId}" src="${postItem.postImageUrl}" >
+             <img class="post-image" data-post-id="${postItem.postId}" src="${postItem.postImageUrl}" data-index="${index}">
            </div>
            <div class="post-likes">
              <button data-post-id="${postItem.postId}"data-like="${postItem.isLiked ? 'true' : ''}" data-index="${index}" class="like-button">
@@ -54,27 +55,30 @@ export function renderPostsPageComponent({ appEl }) {
                      : './assets/images/like-not-active.svg'}></button> 
              <p class="post-likes-text">
                Нравится: ${postItem.usersLikes.length > 0
-                       ? `${postItem.usersLikes[postItem.usersLikes.length - 1].name}
+                       ? `${replacerString(postItem.usersLikes[postItem.usersLikes.length - 1].name)}
                ${postItem.usersLikes.length - 1 > 0 ? 'и еще' + (postItem.usersLikes.length - 1) : ''} `
                        : '0'}
              </p>
            </div>
            <p class="post-text"  > 
              <span  class="user-name">${postItem.userName}</span>
-						 <span  class="user-description" data-post-id="${postItem.postId}" > ${postItem.description}</span>
+						 <span  class="user-description" data-post-id="${postItem.postId}"> ${postItem.description}</span>
            </p>
            <p class="post-date">
              ${postItem.postCreatedAt}
            </p>
-				 <button class="delete-button" data-post-id="${postItem.postId}">
-				 <img src="./assets/images/delete.svg" alt="del">
-			</button>
+					 ${isCurrentUserPost
+						? 
+								`<button data-post-id="${postItem.postId}" class="delete-button">  <img src="./assets/images/delete.svg" alt="del"></button>`
+						
+						: ''
+				}
          </li> 
       `
             })
             .join('')
     } else {
-        message = 'постов нет'
+        message = 'постов пока нет'
     }
 
     const mainHtml = ` <div class="page-container">
@@ -85,6 +89,16 @@ export function renderPostsPageComponent({ appEl }) {
   </div>
   `
     appEl.innerHTML = mainHtml
+
+		function getCurrentUserId() {
+			const user = getUserFromLocalStorage();
+			if (user) {
+					return user._id; 
+			}
+			return null;
+	}
+
+
 
     renderHeaderComponent({
         element: document.querySelector('.header-container'),
@@ -105,20 +119,13 @@ export function deleteButtonEventListener({ token }) {
 	document.querySelectorAll('.delete-button').forEach((deleteButton) => {
 			deleteButton.addEventListener('click', async (event) => {
 					event.stopPropagation()
-					const postId = deleteButton.dataset.postId
+					if(token){
+						const postId = deleteButton.dataset.postId
 					const index =  posts.findIndex((post) => post.id === postId)
-
-					if (index !== -1) {
-							try {
-									await deletePost({ postId, token })
-									posts.splice(index, 1)
-									renderApp()
-							} catch (error) {
-									console.error('Ошибка при удалении поста:', error)
-							}
-					} else {
-							console.error('Пост с ID', postId, 'не найден в списке постов.')
-					}
+					posts.splice(index, 1)
+					deletePost({ postId, token })
+					renderApp()
+					} 
 			})
 	})
 }
@@ -131,6 +138,7 @@ export function likeEventListener() {
             const index = likeButton.dataset.index
             const token = getToken()
 
+						if (token) {
             if (posts[index].isLiked) {
                 const updatedPost = await removeLike({ token, postId })
                 posts[index].isLiked = false
@@ -141,8 +149,11 @@ export function likeEventListener() {
                 posts[index].likes = updatedPost.post.likes
             }
             renderApp()
-        })
-    })
+					} else {
+						alert('Пользователь не авторизован. Запрос на лайк не выполнен.');
+				}
+		});
+});
 }
 
 export function likeEventListenerOnIMG() {
@@ -152,7 +163,7 @@ export function likeEventListenerOnIMG() {
             const postId = likeButton.dataset.postId
             const index = likeButton.dataset.index
             const token = getToken()
-
+						if (token) {
             if (posts[index].isLiked) {
                 const updatedPost = await removeLike({ token, postId })
                 posts[index].isLiked = false
@@ -163,6 +174,9 @@ export function likeEventListenerOnIMG() {
                 posts[index].likes = updatedPost.post.likes
             }
             renderApp()
-        })
-    })
+					} else {
+						alert('Поставить лайк могут только авторизованные пользователи')
+				}
+		});
+});
 }

@@ -1,6 +1,7 @@
 // Замени на свой, чтобы получить независимый от других набор данных.
 // "боевая" версия инстапро лежит в ключе prod
 
+
 import { setPosts } from "./index.js";
 
 // const personalKey = "prod";
@@ -79,15 +80,17 @@ export function uploadImage({ file }) {
 
 export async function addPost({ token, imageUrl }) {
   const commentValue = document.getElementById('description').value;
+	if (!commentValue.trim() || !imageUrl.trim()) {
+    alert('Нет фото или описания');
+    return null;
+  }
+
   const response = await fetch(postsHost, {
     method: 'POST',
     body: JSON.stringify({ description: commentValue, imageUrl }),
     headers: { Authorization: token },
   });
-  if (response.status === 400) {
-    alert('Нет фото или описания');
-    return null;
-  }
+
   return response.json();
 }
 
@@ -148,15 +151,9 @@ export function deletePost({ token, postId }) {
 					method: 'DELETE',
 					headers: {
 							Authorization: token,
-					},				
+					},
 				}).then((response) => {
-					if (response.status === 401) {
-							alert('Удалить пост могут только авторизованные пользователи')
-							throw new Error('Нет авторизации')
-					}
+					
 					return response.json()
 			})
 		}
-
-
-
