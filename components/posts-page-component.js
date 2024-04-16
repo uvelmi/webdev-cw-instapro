@@ -2,7 +2,7 @@ import { USER_POSTS_PAGE } from '../routes.js'
 import { renderHeaderComponent } from './header-component.js'
 import {posts, goToPage, getToken, renderApp} from '../index.js'
 import { addLike, removeLike, deletePost} from '../api.js'
-import { replacerString } from '../helpers.js'
+import { replacerString, getUserFromLocalStorage } from '../helpers.js'
 import { formatDistance } from 'date-fns'
 import { ru } from 'date-fns/locale'
 
@@ -38,6 +38,7 @@ export function renderPostsPageComponent({ appEl }) {
 
         message = getApiPosts
             .map((postItem, index) => {
+							const isCurrentUserPost = postItem.userId === getCurrentUserId();
                 return `
          <li id="post" class="post">
            <div class="post-header" data-user-id="${postItem.userId}">
@@ -66,10 +67,12 @@ export function renderPostsPageComponent({ appEl }) {
            <p class="post-date">
              ${postItem.postCreatedAt}
            </p>
-					 ${postItem.userId ?
-				 `<button class="delete-button" data-post-id="${postItem.postId}" data-index="${index}">
-				 <img src="./assets/images/delete.svg" alt="del">
-			</button>` : ''}
+					 ${isCurrentUserPost
+						? 
+								`<button data-post-id="${postItem.postId}" class="delete-button">  <img src="./assets/images/delete.svg" alt="del"></button>`
+						
+						: ''
+				}
          </li> 
       `
             })
@@ -86,6 +89,16 @@ export function renderPostsPageComponent({ appEl }) {
   </div>
   `
     appEl.innerHTML = mainHtml
+
+		function getCurrentUserId() {
+			const user = getUserFromLocalStorage();
+			if (user) {
+					return user._id; 
+			}
+			return null;
+	}
+
+
 
     renderHeaderComponent({
         element: document.querySelector('.header-container'),
@@ -104,17 +117,11 @@ export function renderPostsPageComponent({ appEl }) {
 
 export function deleteButtonEventListener({ token }) {
 	document.querySelectorAll('.delete-button').forEach((deleteButton) => {
-		if (token) {
-		deleteButton.style.display = 'block';
-		} else {
-			deleteButton.style.display = 'none';
-		}
 			deleteButton.addEventListener('click', async (event) => {
 					event.stopPropagation()
 					if(token){
 						const postId = deleteButton.dataset.postId
 					const index =  posts.findIndex((post) => post.id === postId)
-
 					posts.splice(index, 1)
 					deletePost({ postId, token })
 					renderApp()
@@ -157,7 +164,6 @@ export function likeEventListenerOnIMG() {
             const index = likeButton.dataset.index
             const token = getToken()
 						if (token) {
-
             if (posts[index].isLiked) {
                 const updatedPost = await removeLike({ token, postId })
                 posts[index].isLiked = false
